@@ -1,0 +1,24 @@
+# TagBot: after the General registry merges a new version of KOS.jl, it creates the git tag and the GitHub release
+# of that version. This is the example workflow of JuliaRegistries/TagBot (example.yml, v1.26.1), without the SSH key:
+# KOS.jl has no documentation build to trigger. The commit that adds this file cannot be tagged with GITHUB_TOKEN;
+# tag that first version by hand (git tag v0.1.0 && git push origin v0.1.0) or give TagBot an SSH deploy key.
+name: TagBot
+on:
+  issue_comment:
+    types:
+      - created
+  workflow_dispatch:
+    inputs:
+      lookback:
+        description: "[DEPRECATED] No longer has any effect"
+        default: "3"
+jobs:
+  TagBot:
+    if: github.event_name == 'workflow_dispatch' || github.actor == 'JuliaTagBot'
+    # ubuntu-slim doesn't support containers, and thus won't work
+    runs-on: ubuntu-latest
+    steps:
+      - uses: JuliaRegistries/TagBot@a761b867f05e7e410011ab16b244f2fffec16c85 # v1.26.1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          # ssh: ${{ secrets.NAME_OF_MY_SSH_PRIVATE_KEY_SECRET }}

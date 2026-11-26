@@ -1,0 +1,8 @@
+KOS.jl
+Copyright 2026 Katsenia SpA
+
+Licensed under the Apache License, Version 2.0 (see the LICENSE file).
+
+KOS.jl is an interface to KOS (Katsenia Optimization Solver). KOS itself, the library libkos, is not part of this
+package and is not open-source software: it is proprietary software of Katsenia SpA, installed separately and
+governed by the KOS End-User License Agreement, https://katsenia.com/license.html.
