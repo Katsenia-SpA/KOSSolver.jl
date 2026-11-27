@@ -46,7 +46,7 @@ Writes the LP text of `d`. The data come already checked (no NaN, finite costs a
 """
 function _escribe_lp(io::IO, d::DatosLp)
     n = length(d.costo)
-    println(io, "\\ KOS.jl")
+    println(io, "\\ KOSSolver.jl")
     println(io, d.maximiza ? "Maximize" : "Minimize")
     print(io, " obj:")
     for j in 1:n

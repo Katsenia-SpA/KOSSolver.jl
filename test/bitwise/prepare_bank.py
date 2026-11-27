@@ -1,7 +1,7 @@
-"""Prepares the bank of the bitwise test of KOS.jl.
+"""Prepares the bank of the bitwise test of KOSSolver.jl.
 
 For each input MPS it writes to the output folder:
-- `<name>.mps`: the same file with the ROWS lines reordered (the rows grouped in the type order of KOS.jl:
+- `<name>.mps`: the same file with the ROWS lines reordered (the rows grouped in the type order of KOSSolver.jl:
   LessThan, GreaterThan, EqualTo, Interval; within each type, in the order of the file). Only ROWS lines change
   place: KOS reads it as the original with the rows permuted, and it is what "KOS directly" reads.
 - `<name>.dat`: the model of that file (read with the reader of kos-verify, which follows the semantics of KOS) in a

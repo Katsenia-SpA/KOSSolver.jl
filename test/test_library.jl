@@ -1,15 +1,15 @@
-# Where KOS.jl looks for the KOS C library and in what order: the one of ENV["KOS_LIBRARY"] (that one and no
+# Where KOSSolver.jl looks for the KOS C library and in what order: the one of ENV["KOS_LIBRARY"] (that one and no
 # other), the one of the Python package kos-solver (what the `python3` or the `python` of the PATH answers) and the
 # one of the system's loader. The Pythons are fake scripts that print a path; the libraries, copies of the one in
 # use. What depends on the system's loader (LD_LIBRARY_PATH is read at startup) runs in another Julia process.
-# ENV["KOS_JL_EXPECT_SOURCE"] says where the library of this run must come from (KOS_LIBRARY, python or system),
+# ENV["KOSSOLVER_JL_EXPECT_SOURCE"] says where the library of this run must come from (KOS_LIBRARY, python or system),
 # for whoever runs the tests in a deliberate setup.
 
 module TestLibrary
 
 using Test
 import Libdl
-import KOS
+import KOSSolver
 
 # a fake "python" in `carpeta`: an sh script with that body
 function python_falso(carpeta, cuerpo; nombre = "python3")
@@ -32,66 +32,68 @@ misma(a, b) = !isempty(a) && !isempty(b) && realpath(a) == realpath(b)
 # searches for the library again with that environment: (where from, the path, the error)
 function carga_con(pares...)
     return withenv(pares...) do
-        KOS._carga_biblioteca()
-        (KOS.library_source(), KOS.library_path(), KOS.load_error())
+        KOSSolver._carga_biblioteca()
+        (KOSSolver.library_source(), KOSSolver.library_path(), KOSSolver.load_error())
     end
 end
 
-# `import KOS` in another Julia process with that environment: (where from, the path, the error)
+# `import KOSSolver` in another Julia process with that environment: (where from, the path, the error)
 function en_otro_proceso(pares...)
     entorno = Dict{String,String}(k => v for (k, v) in ENV)
     for (k, v) in pares
         v === nothing ? delete!(entorno, k) : (entorno[k] = v)
     end
-    codigo = "import KOS; print(KOS.library_source(), '\\n', KOS.library_path(), '\\n', KOS.load_error())"
+    codigo = "import KOSSolver; print(KOSSolver.library_source(), '\\n', KOSSolver.library_path(), '\\n', " *
+             "KOSSolver.load_error())"
     orden = `$(Base.julia_cmd()) --startup-file=no --project=$(Base.active_project()) -e $codigo`
     return split(read(setenv(orden, entorno), String), '\n'; limit = 3)
 end
 
 function test_la_de_esta_corrida()
-    @test isempty(KOS.load_error())
-    @test isfile(KOS.library_path())
-    @test KOS.library_source() in ("KOS_LIBRARY", "python", "system")
+    @test isempty(KOSSolver.load_error())
+    @test isfile(KOSSolver.library_path())
+    @test KOSSolver.library_source() in ("KOS_LIBRARY", "python", "system")
     pedida = get(ENV, "KOS_LIBRARY", "")
     if !isempty(pedida)
-        @test KOS.library_source() == "KOS_LIBRARY"
-        @test misma(KOS.library_path(), pedida)
+        @test KOSSolver.library_source() == "KOS_LIBRARY"
+        @test misma(KOSSolver.library_path(), pedida)
     else
-        @test KOS.library_source() != "KOS_LIBRARY"
+        @test KOSSolver.library_source() != "KOS_LIBRARY"
     end
-    esperado = get(ENV, "KOS_JL_EXPECT_SOURCE", "")
-    isempty(esperado) || @test KOS.library_source() == esperado
-    @test occursin(r"^\d+\.\d+\.\d+", KOS.version_string())
+    esperado = get(ENV, "KOSSOLVER_JL_EXPECT_SOURCE", "")
+    isempty(esperado) || @test KOSSolver.library_source() == esperado
+    @test occursin(r"^\d+\.\d+\.\d+", KOSSolver.version_string())
 end
 
 function test_lo_que_contesta_python(carpeta, biblioteca)
-    plazo = KOS._PLAZO_DE_PYTHON[]
+    plazo = KOSSolver._PLAZO_DE_PYTHON[]
     try
-        KOS._PLAZO_DE_PYTHON[] = 1.0
+        KOSSolver._PLAZO_DE_PYTHON[] = 1.0
         d = mkpath(joinpath(carpeta, "contesta"))
         # the path of a file: accepted, also after other lines
-        @test KOS._pregunta_a_python(python_falso(d, "echo '$biblioteca'")) == biblioteca
-        @test KOS._pregunta_a_python(python_falso(d, "echo 'a warning'; echo '$biblioteca'")) == biblioteca
+        @test KOSSolver._pregunta_a_python(python_falso(d, "echo '$biblioteca'")) == biblioteca
+        @test KOSSolver._pregunta_a_python(python_falso(d, "echo 'a warning'; echo '$biblioteca'")) == biblioteca
         # what is not accepted: it exits with an error, it prints nothing, a relative path, a file that does not exist
-        @test KOS._pregunta_a_python(python_falso(d, "echo '$biblioteca'; exit 1")) === nothing
-        @test KOS._pregunta_a_python(python_falso(d, "exit 0")) === nothing
-        @test cd(() -> KOS._pregunta_a_python(python_falso(d, "echo libkos.so.1")), dirname(biblioteca)) === nothing
-        @test KOS._pregunta_a_python(python_falso(d, "echo '$(joinpath(d, "no_esta.so"))'")) === nothing
-        @test KOS._pregunta_a_python(joinpath(d, "no_hay_tal_python")) === nothing
+        @test KOSSolver._pregunta_a_python(python_falso(d, "echo '$biblioteca'; exit 1")) === nothing
+        @test KOSSolver._pregunta_a_python(python_falso(d, "exit 0")) === nothing
+        @test cd(() -> KOSSolver._pregunta_a_python(python_falso(d, "echo libkos.so.1")),
+                 dirname(biblioteca)) === nothing
+        @test KOSSolver._pregunta_a_python(python_falso(d, "echo '$(joinpath(d, "no_esta.so"))'")) === nothing
+        @test KOSSolver._pregunta_a_python(joinpath(d, "no_hay_tal_python")) === nothing
         # one that does not answer is abandoned when the timeout expires
         t0 = time()
-        @test KOS._pregunta_a_python(python_falso(d, "exec sleep 30")) === nothing
+        @test KOSSolver._pregunta_a_python(python_falso(d, "exec sleep 30")) === nothing
         @test time() - t0 < 10
         # a real Python does not take a kos.py of the working directory for the package
         python = something(Sys.which("python3"), Sys.which("python"), "")
         if !isempty(python)
             aqui = mkpath(joinpath(carpeta, "de_trabajo"))
             write(joinpath(aqui, "kos.py"), "def library_path():\n    return '$biblioteca'\n")
-            KOS._PLAZO_DE_PYTHON[] = plazo
-            @test cd(() -> KOS._pregunta_a_python(python), aqui) != biblioteca
+            KOSSolver._PLAZO_DE_PYTHON[] = plazo
+            @test cd(() -> KOSSolver._pregunta_a_python(python), aqui) != biblioteca
         end
     finally
-        KOS._PLAZO_DE_PYTHON[] = plazo
+        KOSSolver._PLAZO_DE_PYTHON[] = plazo
     end
 end
 
@@ -123,8 +125,8 @@ function test_en_este_proceso(carpeta, en_uso)
         origen, ruta, falla = carga_con("KOS_LIBRARY" => mala, "PATH" => con_python)
         @test origen == "" && ruta == ""
         @test occursin("ENV[\"KOS_LIBRARY\"] = \"$mala\"", falla) && occursin(porque, falla)
-        @test_throws ErrorException KOS.version_string()
-        @test_throws ErrorException KOS.license_status()
+        @test_throws ErrorException KOSSolver.version_string()
+        @test_throws ErrorException KOSSolver.license_status()
     end
 end
 
@@ -178,16 +180,16 @@ end
 function runtests()
     @testset "library" begin
         test_la_de_esta_corrida()
-        en_uso, origen = KOS.library_path(), KOS.library_source()
+        en_uso, origen = KOSSolver.library_path(), KOSSolver.library_source()
         mktempdir() do carpeta
             try
                 test_lo_que_contesta_python(carpeta, copia(joinpath(carpeta, "p"), en_uso))
                 test_en_este_proceso(carpeta, en_uso)
             finally
                 # the one of this run is put in use again for the other tests
-                KOS._carga_biblioteca()
+                KOSSolver._carga_biblioteca()
             end
-            @test misma(KOS.library_path(), en_uso) && KOS.library_source() == origen
+            @test misma(KOSSolver.library_path(), en_uso) && KOSSolver.library_source() == origen
             test_en_otro_proceso(carpeta, en_uso)
         end
     end

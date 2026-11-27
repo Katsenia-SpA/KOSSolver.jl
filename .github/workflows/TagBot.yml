@@ -1,7 +1,8 @@
-# TagBot: after the General registry merges a new version of KOS.jl, it creates the git tag and the GitHub release
+# TagBot: after the General registry merges a new version of KOSSolver.jl, it creates the git tag and the GitHub release
 # of that version. This is the example workflow of JuliaRegistries/TagBot (example.yml, v1.26.1), without the SSH key:
-# KOS.jl has no documentation build to trigger. The commit that adds this file cannot be tagged with GITHUB_TOKEN;
-# tag that first version by hand (git tag v0.1.0 && git push origin v0.1.0) or give TagBot an SSH deploy key.
+# KOSSolver.jl has no documentation build to trigger. A commit that adds or changes this file cannot be tagged with
+# GITHUB_TOKEN: tag that version by hand (git tag vX.Y.Z COMMIT && git push origin vX.Y.Z) or give TagBot an SSH
+# deploy key.
 name: TagBot
 on:
   issue_comment:

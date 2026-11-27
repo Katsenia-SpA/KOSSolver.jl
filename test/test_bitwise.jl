@@ -1,11 +1,11 @@
 # Bitwise against KOS directly. For each instance of the bank that bitwise/prepare_bank.py builds (an MPS with the
-# rows grouped in the type order of KOS.jl, and its .dat): the JuMP model built from the .dat and solved with
-# KOS.Optimizer gives the same as `kos_read` of the MPS with the same parameters: the status, the objective, the
+# rows grouped in the type order of KOSSolver.jl, and its .dat): the JuMP model built from the .dat and solved with
+# KOSSolver.Optimizer gives the same as `kos_read` of the MPS with the same parameters: the status, the objective, the
 # solution, the row activity, the duals and the reduced costs, the iterations, the nodes and the work, bit for bit;
 # and what JuMP and MOI give (value, dual) is what KOS gives, with the sign convention of MOI (σy on the rows and σd
 # on the bounds).
 #
-# The bank goes in ENV["KOS_JL_BANK"] (a folder with the .mps and .dat files); without it, the test does not run.
+# The bank goes in ENV["KOSSOLVER_JL_BANK"] (a folder with the .mps and .dat files); without it, the test does not run.
 # Without a license in effect (the Community edition), an instance over the size limit is not solved: both paths
 # must give the same error, `size_limit`.
 
@@ -14,7 +14,7 @@ module TestBitwise
 using Test
 using JuMP
 import MathOptInterface as MOI
-import KOS
+import KOSSolver
 
 struct Dat
     maximiza::Bool
@@ -70,7 +70,7 @@ _bits(a, b) = false
 
 # the JuMP model of the .dat: columns in their order, bounds as variable constraints, rows by type in their order
 function arma(d::Dat; al_reves::Bool = false)
-    m = Model(KOS.Optimizer)
+    m = Model(KOSSolver.Optimizer)
     n = length(d.costo)
     x = @variable(m, [1:n])
     for j in 1:n
@@ -113,17 +113,17 @@ end
 
 # what a KOS solve leaves in the model `p`
 function resultados(p::Ptr{Cvoid})
-    filas, cols = KOS._kos_dims(p)
+    filas, cols = KOSSolver._kos_dims(p)
     return (
-        estado = KOS._kos_status(p),
-        objetivo = KOS._kos_objective(p),
-        x = KOS._kos_vector(:kos_get_solution, p, cols),
-        actividad = KOS._kos_vector(:kos_get_row_activity, p, filas),
-        y = KOS._kos_vector(:kos_get_duals, p, filas),
-        d = KOS._kos_vector(:kos_get_reduced_costs, p, cols),
-        iteraciones = KOS._kos_info(p, KOS.KOS_INFO_ITERATIONS),
-        nodos = KOS._kos_info(p, KOS.KOS_INFO_NODES),
-        trabajo = KOS._kos_info(p, KOS.KOS_INFO_WORK),
+        estado = KOSSolver._kos_status(p),
+        objetivo = KOSSolver._kos_objective(p),
+        x = KOSSolver._kos_vector(:kos_get_solution, p, cols),
+        actividad = KOSSolver._kos_vector(:kos_get_row_activity, p, filas),
+        y = KOSSolver._kos_vector(:kos_get_duals, p, filas),
+        d = KOSSolver._kos_vector(:kos_get_reduced_costs, p, cols),
+        iteraciones = KOSSolver._kos_info(p, KOSSolver.KOS_INFO_ITERATIONS),
+        nodos = KOSSolver._kos_info(p, KOSSolver.KOS_INFO_NODES),
+        trabajo = KOSSolver._kos_info(p, KOSSolver.KOS_INFO_WORK),
     )
 end
 
@@ -144,25 +144,25 @@ function compara(banco, nombre, params; al_reves::Bool = false)
     end
     optimize!(m)
     o = unsafe_backend(m)
-    a = resultados(KOS.kos_model(o))
-    directo = KOS._kos_read(joinpath(banco, nombre * ".mps"), KOS.KOS_FORMAT_MPS)
+    a = resultados(KOSSolver.kos_model(o))
+    directo = KOSSolver._kos_read(joinpath(banco, nombre * ".mps"), KOSSolver.KOS_FORMAT_MPS)
     try
         if al_reves
             # KOS directly with the sense changed and the costs negated (kos_set_sense and kos_set_obj_coef)
             @assert d.constante == 0.0
-            KOS._revisa(ccall(KOS._f(:kos_set_sense), Cint, (Ptr{Cvoid}, Cint), directo,
-                              d.maximiza ? KOS.KOS_MINIMIZE : KOS.KOS_MAXIMIZE))
+            KOSSolver._revisa(ccall(KOSSolver._f(:kos_set_sense), Cint, (Ptr{Cvoid}, Cint), directo,
+                              d.maximiza ? KOSSolver.KOS_MINIMIZE : KOSSolver.KOS_MAXIMIZE))
             # the zero costs stay +0.0, as in the JuMP model (which does not have those terms)
             for j in eachindex(d.costo)
                 d.costo[j] == 0.0 && continue
-                KOS._revisa(ccall(KOS._f(:kos_set_obj_coef), Cint, (Ptr{Cvoid}, Int64, Cdouble), directo, j - 1,
-                                  -d.costo[j]))
+                KOSSolver._revisa(ccall(KOSSolver._f(:kos_set_obj_coef), Cint, (Ptr{Cvoid}, Int64, Cdouble),
+                                        directo, j - 1, -d.costo[j]))
             end
         end
         for (k, v) in params
-            KOS._kos_set_param(directo, k, KOS._texto_de(v))
+            KOSSolver._kos_set_param(directo, k, KOSSolver._texto_de(v))
         end
-        KOS._kos_solve(directo)
+        KOSSolver._kos_solve(directo)
         b = resultados(directo)
         difiere = [k for k in (:estado, :objetivo, :x, :actividad, :y, :d, :iteraciones, :nodos, :trabajo)
                    if !(k == :estado ? getfield(a, k) == getfield(b, k) : _bits(getfield(a, k), getfield(b, k)))]
@@ -190,11 +190,11 @@ function compara(banco, nombre, params; al_reves::Bool = false)
                 end
             end
         end
-        moi_bien &= termination_status(m) == KOS.termination_status_of(b.estado)
+        moi_bien &= termination_status(m) == KOSSolver.termination_status_of(b.estado)
         moi_bien || push!(difiere, :moi)
-        return isempty(difiere), KOS.status_string(b.estado), difiere
+        return isempty(difiere), KOSSolver.status_string(b.estado), difiere
     finally
-        KOS._kos_free(directo)
+        KOSSolver._kos_free(directo)
     end
 end
 
@@ -213,23 +213,23 @@ function tope_en_los_dos(banco, nombre, params)
     catch e
         e
     end
-    directo = KOS._kos_read(joinpath(banco, nombre * ".mps"), KOS.KOS_FORMAT_MPS)
+    directo = KOSSolver._kos_read(joinpath(banco, nombre * ".mps"), KOSSolver.KOS_FORMAT_MPS)
     por_kos = try
-        KOS._kos_solve(directo)
+        KOSSolver._kos_solve(directo)
         nothing
     catch e
         e
     finally
-        KOS._kos_free(directo)
+        KOSSolver._kos_free(directo)
     end
-    return por_jump isa KOS.KOSError && por_kos isa KOS.KOSError && por_jump.name == "size_limit" &&
+    return por_jump isa KOSSolver.KOSError && por_kos isa KOSSolver.KOSError && por_jump.name == "size_limit" &&
            por_kos.name == "size_limit" && por_jump.message == por_kos.message
 end
 
-function runtests(; banco = get(ENV, "KOS_JL_BANK", ""), lp_params = Pair{String,Any}[],
+function runtests(; banco = get(ENV, "KOSSOLVER_JL_BANK", ""), lp_params = Pair{String,Any}[],
                   mip_params = Pair{String,Any}["work_limit" => 0.5])
     if isempty(banco)
-        @test_skip "ENV[\"KOS_JL_BANK\"] not set"
+        @test_skip "ENV[\"KOSSOLVER_JL_BANK\"] not set"
         return (0, 0)
     end
     # the instances: the .dat files of the folder and of its subfolders (netlib, infeasible, MIP), by relative path
@@ -240,7 +240,7 @@ function runtests(; banco = get(ENV, "KOS_JL_BANK", ""), lp_params = Pair{String
     sort!(nombres)
     total, bien, sobre_el_tope = 0, 0, 0
     # the size limit of the edition in effect: (rows, columns), or `nothing` with a license in effect
-    tope = KOS._json(KOS.license_status())["size_limit"]
+    tope = KOSSolver._json(KOSSolver.license_status())["size_limit"]
     @testset "bitwise" begin
         for nombre in nombres
             d = lee_dat(joinpath(banco, nombre * ".dat"))

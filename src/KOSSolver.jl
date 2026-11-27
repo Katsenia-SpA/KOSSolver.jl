@@ -1,17 +1,17 @@
 """
-    KOS
+    KOSSolver
 
 A MathOptInterface (and so JuMP) interface to KOS, the Katsenia Optimization Solver: LP and MIP over its C library
 `libkos`, which is installed apart: with the Python package (`pip install --pre kos-solver`) or as the download of
-https://katsenia.com/downloads.html. KOS.jl finds it by itself, or takes the path of `ENV["KOS_LIBRARY"]` (set
-before `using KOS`); `KOS.library_path()` says which one is in use and `KOS.load_error()` why none is.
+https://katsenia.com/downloads.html. KOSSolver.jl finds it by itself, or takes the path of `ENV["KOS_LIBRARY"]` (set
+before `using KOSSolver`); `KOSSolver.library_path()` says which one is in use and `KOSSolver.load_error()` why none is.
 
 ```julia
-using JuMP, KOS
-model = Model(KOS.Optimizer)
+using JuMP, KOSSolver
+model = Model(KOSSolver.Optimizer)
 ```
 """
-module KOS
+module KOSSolver
 
 import Libdl
 import MathOptInterface as MOI

@@ -1,17 +1,18 @@
 # The KOS edition and its size limit. Without a license in effect on the machine, the library is the Community
 # edition: it solves models of up to 2,000 rows and 2,000 columns, and a larger one gives the KOS error `size_limit`
-# (a `KOS.KOSError` in `optimize!`, with the limit and the pricing page in the message) without solving. With a
-# license in effect there is no limit. The tests look at `KOS.license_status()` and expect what matches the
-# situation of the run; ENV["KOS_JL_EXPECT_LICENSE"] (yes or no) fixes it for whoever runs them in a deliberate setup.
+# (a `KOSSolver.KOSError` in `optimize!`, with the limit and the pricing page in the message) without solving. With a
+# license in effect there is no limit. The tests look at `KOSSolver.license_status()` and expect what matches the
+# situation of the run; ENV["KOSSOLVER_JL_EXPECT_LICENSE"] (yes or no) fixes it for whoever runs them in a deliberate
+# setup.
 
 module TestLicense
 
 using Test
 using JuMP
 import MathOptInterface as MOI
-import KOS
+import KOSSolver
 
-estado() = KOS._json(KOS.license_status())
+estado() = KOSSolver._json(KOSSolver.license_status())
 
 "Whether there is a license in effect on this machine (no size limit)."
 en_vigor() = estado()["in_effect"] === true
@@ -24,7 +25,7 @@ end
 
 # a feasible m × n LP: row i is x[i mod n] + 2 x[(7i + 3) mod n] >= 1 + i mod 3, with 0 <= x <= 10
 function lp(m, n; entera = false)
-    modelo = Model(KOS.Optimizer)
+    modelo = Model(KOSSolver.Optimizer)
     @variable(modelo, 0 <= x[1:n] <= 10)
     for i in 0:m-1
         @constraint(modelo, x[i%n+1] + 2x[(7i+3)%n+1] >= 1 + i % 3)
@@ -43,7 +44,7 @@ function test_estado()
     else
         @test e["size_limit"] == [2000.0, 2000.0]
     end
-    esperada = get(ENV, "KOS_JL_EXPECT_LICENSE", "")
+    esperada = get(ENV, "KOSSOLVER_JL_EXPECT_LICENSE", "")
     esperada == "yes" && @test e["in_effect"]
     esperada == "no" && @test !e["in_effect"]
 end
@@ -67,9 +68,9 @@ function test_tope()
             catch e
                 e
             end
-            @test falla isa KOS.KOSError
-            falla isa KOS.KOSError || continue
-            @test falla.code == KOS.KOS_ERROR_SIZE_LIMIT && falla.name == "size_limit"
+            @test falla isa KOSSolver.KOSError
+            falla isa KOSSolver.KOSError || continue
+            @test falla.code == KOSSolver.KOS_ERROR_SIZE_LIMIT && falla.name == "size_limit"
             @test occursin("the model has $filas rows and $cols columns", falla.message)
             @test occursin("up to 2000 rows (constraints) and 2000 columns (variables)", falla.message)
             @test occursin("https://katsenia.com/pricing.html", falla.message)

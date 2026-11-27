@@ -8,14 +8,14 @@ module TestSigns
 using Test
 using JuMP
 import MathOptInterface as MOI
-import KOS
+import KOSSolver
 
 const TOL = 1e-9
 
 # A (min): min 2x + 3y, c1: x + y ≥ 4, c2: x ≤ 3, x, y ≥ 0. Optimum x = 3, y = 1, z = 9.
 # ∂z/∂b1 = 3, ∂z/∂u2 = −1: MOI duals 3 (≥) and −1 (≤); the reduced costs, 0.
 function test_min_le_ge()
-    m = Model(KOS.Optimizer)
+    m = Model(KOSSolver.Optimizer)
     @variable(m, x >= 0)
     @variable(m, y >= 0)
     @constraint(m, c1, x + y >= 4)
@@ -38,7 +38,7 @@ end
 # ∂z/∂b1 = 2 (KOS y = 2), c2 inactive, the bound y ≤ 2 is worth 3 − 2 = 1 (KOS d = 1). MOI: −2 on c1 (≤), 0 on c2
 # and −1 on the upper bound of y; JuMP.reduced_cost(y) = 1.
 function test_max_le_ge_bound()
-    m = Model(KOS.Optimizer)
+    m = Model(KOSSolver.Optimizer)
     @variable(m, x >= 0)
     @variable(m, 0 <= y <= 2)
     @constraint(m, c1, x + y <= 4)
@@ -61,7 +61,7 @@ end
 # C: e: x + y = 2, iv: 0 ≤ x − y ≤ 1, x and y free. min 3x + y: x = y = 1, z = 4; ∂z/∂b(e) = 2 and ∂z/∂l(iv) = 1.
 # max −3x − y: the same MOI duals (2 and 1) and z = −4.
 function test_eq_interval(sentido)
-    m = Model(KOS.Optimizer)
+    m = Model(KOSSolver.Optimizer)
     @variable(m, x)
     @variable(m, y)
     @constraint(m, e, x + y == 2)
@@ -84,7 +84,7 @@ end
 # D: r: x + y ≤ 4.5, 0 ≤ x ≤ 3 (Interval), 1 ≤ y ≤ 2. min −3x − 2y: x = 3 (at its upper bound), y = 1.5,
 # z = −12; KOS y(r) = −2, d(x) = −1. MOI: −2 on r and −1 on the interval of x, in both senses (max 3x + 2y).
 function test_interval_bound(sentido)
-    m = Model(KOS.Optimizer)
+    m = Model(KOSSolver.Optimizer)
     @variable(m, x)
     @variable(m, 1 <= y <= 2)
     cx = @constraint(m, x in MOI.Interval(0.0, 3.0))
@@ -112,7 +112,7 @@ end
 # E: a fixed variable (EqualTo) and an active lower bound. min x + 2y, x + y ≥ 3, x == 1, y ≥ 0: y = 2, z = 5;
 # ∂z/∂b = 2, the dual of x == 1 is 1 − 2 = −1, the bound of y is not active. Maximizing −x − 2y, the same.
 function test_fixed(sentido)
-    m = Model(KOS.Optimizer)
+    m = Model(KOSSolver.Optimizer)
     @variable(m, x == 1)
     @variable(m, y >= 0)
     @constraint(m, c, x + y >= 3)
@@ -131,7 +131,7 @@ end
 # F: the active lower bound with a positive reduced cost. min x + y, x + 2y ≥ 2, x, y ≥ 0: y = 1, x = 0, z = 1;
 # ∂z/∂b = 0.5; the dual of x ≥ 0 is 1 − 0.5 = 0.5 (≥ 0). Maximizing −x − y, the same in MOI.
 function test_lower_bound(sentido)
-    m = Model(KOS.Optimizer)
+    m = Model(KOSSolver.Optimizer)
     @variable(m, x >= 0)
     @variable(m, y >= 0)
     @constraint(m, c, x + 2y >= 2)
@@ -152,7 +152,7 @@ end
 # G: the MOI duals are σ times those of KOS, bit for bit, and those of the bounds σ d. The rows go to KOS by type
 # (LessThan, GreaterThan, EqualTo, Interval): c2 (≤) is row 1 and c1 (≥) row 2.
 function test_raw_relation(sentido)
-    m = Model(KOS.Optimizer)
+    m = Model(KOSSolver.Optimizer)
     @variable(m, 0 <= x <= 3)
     @variable(m, y >= 1)
     @constraint(m, c1, x + y >= 2.5)
@@ -160,9 +160,9 @@ function test_raw_relation(sentido)
     @objective(m, sentido, sentido == MOI.MIN_SENSE ? 1.5x + 0.25y : -1.5x - 0.25y)
     optimize!(m)
     o = unsafe_backend(m)
-    p = KOS.kos_model(o)
-    yk = KOS._kos_vector(:kos_get_duals, p, 2)
-    dk = KOS._kos_vector(:kos_get_reduced_costs, p, 2)
+    p = KOSSolver.kos_model(o)
+    yk = KOSSolver._kos_vector(:kos_get_duals, p, 2)
+    dk = KOSSolver._kos_vector(:kos_get_reduced_costs, p, 2)
     σ = sentido == MOI.MIN_SENSE ? 1.0 : -1.0
     @test dual(c2) === σ * yk[1]
     @test dual(c1) === σ * yk[2]

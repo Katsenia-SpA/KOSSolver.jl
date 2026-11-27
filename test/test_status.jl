@@ -7,7 +7,7 @@ module TestStatus
 using Test
 using JuMP
 import MathOptInterface as MOI
-import KOS
+import KOSSolver
 
 # the numbers of kos.h and what they mean in MOI
 const TABLA = [
@@ -20,16 +20,16 @@ const TABLA = [
 
 function test_tabla()
     for (k, v) in TABLA
-        @test KOS.termination_status_of(k) == v
+        @test KOSSolver.termination_status_of(k) == v
     end
     for k in 0:16
-        @test KOS.status_string(k) == KOS._ESTADOS[k+1]
+        @test KOSSolver.status_string(k) == KOSSolver._ESTADOS[k+1]
     end
 end
 
 # an n × n transportation LP with fixed data (it needs tens of iterations)
 function transporte(n = 15)
-    m = Model(KOS.Optimizer)
+    m = Model(KOSSolver.Optimizer)
     @variable(m, x[1:n, 1:n] >= 0)
     @constraint(m, [i = 1:n], sum(x[i, :]) <= 10 + mod(7i, 5))
     @constraint(m, [j = 1:n], sum(x[:, j]) >= 8 + mod(3j, 4))
@@ -49,7 +49,7 @@ function optimiza_con_vigia!(m; plazo = 15.0)
             while !listo[] && time() - t0 < plazo
                 Libc.systemsleep(0.05)
             end
-            listo[] || KOS.interrupt!(o)
+            listo[] || KOSSolver.interrupt!(o)
         end
     end
     try
@@ -62,7 +62,7 @@ end
 
 # a hard MIP with fixed data (of the "market share" kind): equalities with binaries and slacks that are minimized
 function mercado(filas = 4, n = 32)
-    m = Model(KOS.Optimizer)
+    m = Model(KOSSolver.Optimizer)
     @variable(m, x[1:n], Bin)
     @variable(m, s[1:filas] >= 0)
     @variable(m, t[1:filas] >= 0)
@@ -84,7 +84,7 @@ function test_lp_limites()
     for (param, valor, estado, crudo) in (("iteration_limit", 1, MOI.ITERATION_LIMIT, "iteration_limit"),
                                           ("work_limit", 0, MOI.OTHER_LIMIT, "work_limit"),
                                           ("time_limit", 0, MOI.TIME_LIMIT, "time_limit"),
-                                          # from a cold start, like every solve of KOS.jl: KOS proves that the
+                                          # from a cold start, like every solve of KOSSolver.jl: KOS proves that the
                                           # optimum is past the limit
                                           ("objective_upper_limit", z / 2, MOI.OBJECTIVE_LIMIT, "objective_limit"))
         m = transporte()
@@ -97,7 +97,7 @@ function test_lp_limites()
     end
 end
 
-# with JuMP, each optimize! copies the model to a new KOS model (KOS.jl is not incremental: the MOI cache hands it
+# with JuMP, each optimize! copies the model to a new KOS model (KOSSolver.jl is not incremental: the MOI cache hands it
 # the whole model): solving again after changing a parameter gives the same, bit for bit, as a new model with that
 # parameter, and does not continue from the previous solve
 function test_resolver_otra_vez()
@@ -166,7 +166,7 @@ function test_interrupcion()
     # a system sleep, without the event loop (which does not advance while thread 1 is in kos_solve)
     tarea = Threads.@spawn begin
         Libc.systemsleep(0.5)
-        KOS.interrupt!(o)
+        KOSSolver.interrupt!(o)
         listo[] = true
     end
     t0 = time()
@@ -179,7 +179,7 @@ function test_interrupcion()
 end
 
 function test_infactible()
-    m = Model(KOS.Optimizer)
+    m = Model(KOSSolver.Optimizer)
     @variable(m, 0 <= x <= 1)
     @variable(m, 0 <= y <= 1)
     @constraint(m, c, x + y >= 3)
@@ -208,7 +208,7 @@ function test_infactible()
 end
 
 function test_no_acotada()
-    m = Model(KOS.Optimizer)
+    m = Model(KOSSolver.Optimizer)
     @variable(m, x >= 0)
     @variable(m, y >= 0)
     @constraint(m, c, x - y <= 1)
@@ -230,7 +230,7 @@ end
 
 # a MIP with a solution and an unbounded relaxation: KOS "unbounded", MOI DUAL_INFEASIBLE with its point
 function test_mip_no_acotado()
-    m = Model(KOS.Optimizer)
+    m = Model(KOSSolver.Optimizer)
     @variable(m, x >= 0, Int)
     @variable(m, y >= 0)
     @constraint(m, x + y >= 1.5)
@@ -243,7 +243,7 @@ function test_mip_no_acotado()
 end
 
 function test_parametros()
-    m = Model(KOS.Optimizer)
+    m = Model(KOSSolver.Optimizer)
     set_attribute(m, "presolve", true)
     @test get_attribute(m, "presolve") == "on"
     set_attribute(m, "primal_tolerance", 1e-9)
@@ -261,7 +261,7 @@ function test_parametros()
     set_attribute(m, MOI.NumberOfThreads(), 2)
     @test get_attribute(m, MOI.NumberOfThreads()) == 2
     @test_throws MOI.UnsupportedAttribute set_attribute(m, "no_such_parameter", 1)
-    @test_throws KOS.KOSError set_attribute(m, "primal_tolerance", 5.0)
+    @test_throws KOSSolver.KOSError set_attribute(m, "primal_tolerance", 5.0)
     # the message without the repeated code: "invalid_value: invalid value ..." once
     e = try
         set_attribute(m, "threads", -3)
@@ -269,17 +269,17 @@ function test_parametros()
     catch err
         err
     end
-    @test e isa KOS.KOSError
+    @test e isa KOSSolver.KOSError
     @test e.name == "invalid_value"
     @test !startswith(e.message, "invalid_value")
     @test count("invalid_value", sprint(showerror, e)) == 1
-    @test_throws KOS.KOSError set_attribute(m, "profile", "no_such_profile")
+    @test_throws KOSSolver.KOSError set_attribute(m, "profile", "no_such_profile")
     @test_throws ArgumentError set_attribute(m, "presolve", [1])
     # the ones set, in their order
     o = unsafe_backend(m)
-    @test KOS.parameters(o)[1] == ("presolve" => "on")
-    @test KOS.parameters(o)[3] == ("profile" => "stable")
-    @test "time_limit" in KOS.parameter_names()
+    @test KOSSolver.parameters(o)[1] == ("presolve" => "on")
+    @test KOSSolver.parameters(o)[3] == ("profile" => "stable")
+    @test "time_limit" in KOSSolver.parameter_names()
     @test solver_name(m) == "KOS"
 end
 
@@ -298,7 +298,7 @@ function test_datos_invalidos()
         x = MOI.add_variable(src)
         MOI.set(src, MOI.ObjectiveSense(), MOI.MIN_SENSE)
         arma(src, x)
-        o = KOS.Optimizer()
+        o = KOSSolver.Optimizer()
         @test_throws ArgumentError MOI.copy_to(o, src)
         # the copy that fails leaves the optimizer empty
         @test MOI.is_empty(o)
@@ -307,18 +307,18 @@ function test_datos_invalidos()
     src = MOI.Utilities.Model{Float64}()
     x = MOI.add_variable(src)
     MOI.add_constraint(src, 1.0 * x + 2.0, MOI.LessThan(1.0))
-    @test_throws MOI.ScalarFunctionConstantNotZero MOI.copy_to(KOS.Optimizer(), src)
+    @test_throws MOI.ScalarFunctionConstantNotZero MOI.copy_to(KOSSolver.Optimizer(), src)
     # quadratic terms: MOI.copy_to rejects them, and JuMP, with the optimizer attached, already when they are added
     src = MOI.Utilities.Model{Float64}()
     x = MOI.add_variable(src)
     MOI.set(src, MOI.ObjectiveSense(), MOI.MIN_SENSE)
     MOI.set(src, MOI.ObjectiveFunction{MOI.ScalarQuadraticFunction{Float64}}(), 1.0 * x * x)
-    @test_throws MOI.UnsupportedAttribute MOI.copy_to(KOS.Optimizer(), src)
+    @test_throws MOI.UnsupportedAttribute MOI.copy_to(KOSSolver.Optimizer(), src)
     src = MOI.Utilities.Model{Float64}()
     x = MOI.add_variable(src)
     MOI.add_constraint(src, 1.0 * x * x, MOI.LessThan(1.0))
-    @test_throws MOI.UnsupportedConstraint MOI.copy_to(KOS.Optimizer(), src)
-    m = Model(KOS.Optimizer)
+    @test_throws MOI.UnsupportedConstraint MOI.copy_to(KOSSolver.Optimizer(), src)
+    m = Model(KOSSolver.Optimizer)
     @variable(m, x)
     for intento in (() -> @constraint(m, x^2 <= 1), () -> @objective(m, Min, x^2))
         mensaje = try
@@ -334,7 +334,7 @@ end
 
 # the result statuses according to the KOS status, with the status set by hand in the optimizer
 function test_estados_de_resultados()
-    o = KOS.Optimizer()
+    o = KOSSolver.Optimizer()
     o.resuelto = true
     o.num_columnas = 1
     o.num_filas = 1
@@ -375,7 +375,7 @@ end
 # the objective constant, with both signs and both senses
 function test_constante()
     for (sentido, k) in ((MOI.MIN_SENSE, 5.25), (MOI.MIN_SENSE, -5.25), (MOI.MAX_SENSE, 5.25), (MOI.MAX_SENSE, -5.25))
-        m = Model(KOS.Optimizer)
+        m = Model(KOSSolver.Optimizer)
         @variable(m, 1 <= x <= 2)
         @objective(m, sentido, 3x + k)
         optimize!(m)
@@ -387,7 +387,7 @@ end
 
 # binaries (ZeroOne without other bounds: [0, 1]) and integers
 function test_binarias()
-    m = Model(KOS.Optimizer)
+    m = Model(KOSSolver.Optimizer)
     @variable(m, x, Bin)
     @variable(m, y, Bin)
     @variable(m, -3.5 <= z <= 2.5, Int)
@@ -405,7 +405,7 @@ end
 # the conflict: the IIS of KOS on an infeasible LP; a MIP with a feasible relaxation and no solution,
 # NO_CONFLICT_FOUND; a feasible model, NO_CONFLICT_EXISTS; before optimize!, the MOI error
 function test_conflicto()
-    m = Model(KOS.Optimizer)
+    m = Model(KOSSolver.Optimizer)
     @variable(m, x >= 0)
     @variable(m, y >= 0)
     @variable(m, z >= 0)
@@ -422,7 +422,7 @@ function test_conflicto()
     @test get_attribute(d, MOI.ConstraintConflictStatus()) == MOI.NOT_IN_CONFLICT
     @test get_attribute(LowerBoundRef(z), MOI.ConstraintConflictStatus()) == MOI.NOT_IN_CONFLICT
     # a binary: the side of [0, 1] that ZeroOne gives
-    m = Model(KOS.Optimizer)
+    m = Model(KOSSolver.Optimizer)
     @variable(m, b, Bin)
     @variable(m, -5 <= w <= 5)
     e = @constraint(m, b >= 2)
@@ -433,7 +433,7 @@ function test_conflicto()
     @test get_attribute(BinaryRef(b), MOI.ConstraintConflictStatus()) == MOI.IN_CONFLICT
     @test get_attribute(LowerBoundRef(w), MOI.ConstraintConflictStatus()) == MOI.NOT_IN_CONFLICT
     # a MIP infeasible by integrality (feasible relaxation)
-    m = Model(KOS.Optimizer)
+    m = Model(KOSSolver.Optimizer)
     @variable(m, 0 <= k <= 10, Int)
     @constraint(m, 2k == 3)
     optimize!(m)
@@ -450,7 +450,7 @@ function test_conflicto()
         @test get_attribute(m, MOI.ConflictStatus()) == MOI.NO_CONFLICT_FOUND
     end
     # feasible ones
-    m = Model(KOS.Optimizer)
+    m = Model(KOSSolver.Optimizer)
     @variable(m, 0 <= v <= 1)
     @constraint(m, v >= 0.5)
     optimize!(m)

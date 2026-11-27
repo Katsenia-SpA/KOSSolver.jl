@@ -1,6 +1,6 @@
-"""The mutants of KOS.jl: small changes in the delicate parts (the signs of the duals, the statuses, the LP text,
+"""The mutants of KOSSolver.jl: small changes in the delicate parts (the signs of the duals, the statuses, the LP text,
 where the library is searched for and in what order) that the tests must kill. For each mutant it copies the package
-to FOLDER/KOS.jl, applies the change (a text that appears exactly once), runs the quick tests (library, license,
+to FOLDER/KOSSolver.jl, applies the change (a text that appears exactly once), runs the quick tests (library, license,
 signs, status, names and the bitwise test on the small bank) with a Julia environment that uses that copy, and
 records whether some test fails (killed), whether they all pass (survived), whether the package does not load or
 whether the tests do not finish within the timeout ("no verdict"): those last two do not count as killed. Before
@@ -97,13 +97,14 @@ MUTANTES = [
 
 
 def corre(carpeta, banco):
-    """The quick tests with the copy of FOLDER/KOS.jl: "pass", "fail" (some test fails or errors inside its
+    """The quick tests with the copy of FOLDER/KOSSolver.jl: "pass", "fail" (some test fails or errors inside its
     testset), "no_load" (any other exit with an error: the package or the tests do not load) or "no_verdict" (they
     do not finish within the timeout)."""
-    entorno = dict(os.environ, KOS_JL_BANK=str(banco), KOS_JL_TESTS="library,license,signs,status,names,bitwise")
+    entorno = dict(os.environ, KOSSOLVER_JL_BANK=str(banco),
+                   KOSSOLVER_JL_TESTS="library,license,signs,status,names,bitwise")
     try:
         r = subprocess.run(["julia", "-t", "2", f"--project={carpeta / 'env'}",
-                            str(carpeta / "KOS.jl/test/runtests.jl")],
+                            str(carpeta / "KOSSolver.jl/test/runtests.jl")],
                            env=entorno, capture_output=True, text=True, timeout=PLAZO)
     except subprocess.TimeoutExpired:
         # without a mutant they take less than a minute; an expired timeout does not prove that the mutant changes a
@@ -118,7 +119,7 @@ def corre(carpeta, banco):
 
 
 def prepara(carpeta):
-    copia = carpeta / "KOS.jl"
+    copia = carpeta / "KOSSolver.jl"
     if copia.exists():
         shutil.rmtree(copia)
     shutil.copytree(PAQUETE, copia, ignore=shutil.ignore_patterns("Manifest.toml"))
@@ -133,7 +134,7 @@ def main():
     prepara(carpeta)
     if not (carpeta / "env/Manifest.toml").exists():
         subprocess.run(["julia", f"--project={carpeta / 'env'}", "-e",
-                        f'using Pkg; Pkg.develop(path="{carpeta / "KOS.jl"}"); '
+                        f'using Pkg; Pkg.develop(path="{carpeta / "KOSSolver.jl"}"); '
                         'Pkg.add(["JuMP", "MathOptInterface", "Test"])'],
                        check=True)
     # without a mutant, the tests pass

@@ -53,23 +53,23 @@ const _ORIGEN = Ref{String}("")
 const _ERROR_DE_CARGA = Ref{String}("")
 
 """
-    KOS.library_path()
+    KOSSolver.library_path()
 
-The path of the KOS C library in use, or `""` if it could not be loaded (see `KOS.load_error()`).
+The path of the KOS C library in use, or `""` if it could not be loaded (see `KOSSolver.load_error()`).
 """
 library_path() = _RUTA[]
 
 """
-    KOS.library_source()
+    KOSSolver.library_source()
 
-How KOS.jl found the KOS C library in use: `"KOS_LIBRARY"` (the path of `ENV["KOS_LIBRARY"]`), `"python"` (the
+How KOSSolver.jl found the KOS C library in use: `"KOS_LIBRARY"` (the path of `ENV["KOS_LIBRARY"]`), `"python"` (the
 library that comes with the Python package `kos-solver`) or `"system"` (the system's loader); `""` if none was
 loaded.
 """
 library_source() = _ORIGEN[]
 
 """
-    KOS.load_error()
+    KOSSolver.load_error()
 
 Why the KOS C library could not be loaded (`""` if it was).
 """
@@ -137,7 +137,7 @@ function _carga(candidata::AbstractString, origen::String)
         punteros[f] = p
     end
     abi = ccall(punteros[:kos_abi_version], Cint, ())
-    abi == KOS_ABI_VERSION || return "the library $ruta has ABI version $abi; KOS.jl needs $KOS_ABI_VERSION"
+    abi == KOS_ABI_VERSION || return "the library $ruta has ABI version $abi; KOSSolver.jl needs $KOS_ABI_VERSION"
     merge!(empty!(_PUNTEROS), punteros)
     _RUTA[] = ruta
     _ORIGEN[] = origen
@@ -148,10 +148,10 @@ end
 _nombres_del_sistema() = Sys.islinux() ? ("libkos.so.1", "libkos") : ("libkos",)
 
 const _COMO_INSTALARLA = "Install it in one of two ways: (1) `pip install --pre kos-solver`, the Python package, " *
-                         "which brings the library (KOS.jl asks `python3` for `kos.library_path()`); or (2) the " *
-                         "download of https://katsenia.com/downloads.html, with lib/libkos.so.1 where the system " *
+                         "which brings the library (KOSSolver.jl asks `python3` for `kos.library_path()`); or (2) " *
+                         "the download of https://katsenia.com/downloads.html, with lib/libkos.so.1 where the system " *
                          "finds shared libraries. Or set ENV[\"KOS_LIBRARY\"] to the full path of the library " *
-                         "(libkos.so.1 on Linux) before `using KOS`."
+                         "(libkos.so.1 on Linux) before `using KOSSolver`."
 
 # Finds libkos and puts it in use. In order: the one of ENV["KOS_LIBRARY"] (if it is set, that one and no other: a
 # path that does not work is reported, not replaced by another library); the one that comes with the Python package
@@ -210,7 +210,7 @@ function _revisa(codigo::Cint)
 end
 
 """
-    KOS.version_string()
+    KOSSolver.version_string()
 
 The version of the loaded KOS C library (`"1.0.0"`).
 """
@@ -257,7 +257,7 @@ function _cadena_de_salida(llamada)
 end
 
 """
-    KOS.license_status()
+    KOSSolver.license_status()
 
 The status of the KOS license on this machine, as the JSON text of `kos_license_status`: an object with `status`
 (`"community"` without a license, `"valid"` with one in effect, ...), `in_effect`, `size_limit` (`[2000, 2000]` for
@@ -285,7 +285,7 @@ _kos_get_param(m::Ptr{Cvoid}, nombre::AbstractString) = _cadena_de_salida(
                                      (Ptr{Cvoid}, Cstring, Ptr{UInt8}, Csize_t, Ptr{Csize_t}), m, nombre, buf, tam, nec)))
 
 """
-    KOS.parameter_names()
+    KOSSolver.parameter_names()
 
 The names of every KOS parameter (the ones `MOI.RawOptimizerAttribute` takes), in the order of the library.
 """

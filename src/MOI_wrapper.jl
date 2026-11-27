@@ -52,13 +52,13 @@ struct _Lugar
 end
 
 """
-    KOS.Optimizer()
+    KOSSolver.Optimizer()
 
 A MathOptInterface optimizer for KOS, the Katsenia Optimization Solver (LP and MIP), over its C library `libkos`.
 
 ```julia
-using JuMP, KOS
-model = Model(KOS.Optimizer)
+using JuMP, KOSSolver
+model = Model(KOSSolver.Optimizer)
 set_attribute(model, "time_limit", 60)      # any KOS parameter by name
 set_attribute(model, "profile", "stable")    # a KOS profile
 ```
@@ -135,7 +135,7 @@ end
 Base.show(io::IO, ::Optimizer) = print(io, "A KOS optimizer")
 
 """
-    KOS.kos_model(model::KOS.Optimizer)
+    KOSSolver.kos_model(model::KOSSolver.Optimizer)
 
 The pointer to the `kos_model` of the last copy (`C_NULL` before one), for calls to the C API of `kos.h` that this
 wrapper does not expose. It belongs to the optimizer: do not free it, and do not use it after the next copy.
@@ -143,7 +143,7 @@ wrapper does not expose. It belongs to the optimizer: do not free it, and do not
 kos_model(m::Optimizer) = m.inner
 
 """
-    KOS.interrupt!(model::KOS.Optimizer)
+    KOSSolver.interrupt!(model::KOSSolver.Optimizer)
 
 Asks the solve in progress to stop, from another task or thread (`kos_interrupt`). The solve ends with the status
 `MOI.INTERRUPTED` (a MIP keeps its best solution and bound). Without a solve in progress it does nothing. Julia needs
@@ -156,10 +156,10 @@ function interrupt!(m::Optimizer)
 end
 
 """
-    KOS.write_model(model::KOS.Optimizer, path::AbstractString)
+    KOSSolver.write_model(model::KOSSolver.Optimizer, path::AbstractString)
 
 Writes the model of the last copy, exactly as KOS has it (MPS, or LP by the extension `.lp`), with the generic names
-KOS.jl gives to columns (`x1`, `x2`, ...) and rows (`r1`, `r2`, ...). `kos solve` on that file with the same
+KOSSolver.jl gives to columns (`x1`, `x2`, ...) and rows (`r1`, `r2`, ...). `kos solve` on that file with the same
 parameters gives the same result, bit for bit (an LP file always; MPS except a row range that MPS cannot hold
 exactly, which KOS warns about).
 """
@@ -170,7 +170,7 @@ function write_model(m::Optimizer, path::AbstractString)
 end
 
 """
-    KOS.parameters(model::KOS.Optimizer)
+    KOSSolver.parameters(model::KOSSolver.Optimizer)
 
 The parameters and profiles set on the optimizer, in order (`"profile" => name` for a profile).
 """
@@ -419,7 +419,7 @@ function _copia!(dest::Optimizer, src::MOI.ModelLike)
     # MOI.Utilities.default_copy_to does with a destination that does not support them
     for attr in MOI.get(src, MOI.ListOfVariableAttributesSet())
         attr isa Union{MOI.VariableName,MOI.VariablePrimalStart} && continue
-        throw(MOI.UnsupportedAttribute(attr, "KOS.jl does not take this variable attribute"))
+        throw(MOI.UnsupportedAttribute(attr, "KOSSolver.jl does not take this variable attribute"))
     end
     # the columns, in the order of creation
     variables = sort!(MOI.get(src, MOI.ListOfVariableIndices()); by = v -> v.value)
@@ -448,7 +448,7 @@ function _copia!(dest::Optimizer, src::MOI.ModelLike)
     end
     for attr in Iterators.flatten([MOI.get(src, MOI.ListOfConstraintAttributesSet{F,S}()) for (F, S) in tipos])
         attr isa Union{MOI.ConstraintName,MOI.ConstraintPrimalStart,MOI.ConstraintDualStart} && continue
-        throw(MOI.UnsupportedAttribute(attr, "KOS.jl does not take this constraint attribute"))
+        throw(MOI.UnsupportedAttribute(attr, "KOSSolver.jl does not take this constraint attribute"))
     end
     # the bounds and the integrality of the columns
     for S in _CONJUNTOS_DE_COTA
@@ -632,7 +632,7 @@ function MOI.get(m::Optimizer, ::MOI.RawStatusString)
 end
 
 """
-    KOS.Status()
+    KOSSolver.Status()
 
 The status of the last solve as KOS names it (`"optimal"`, `"optimal_flagged"`, `"work_limit"`, ...), the same as
 `MOI.RawStatusString`.
@@ -642,7 +642,7 @@ MOI.is_set_by_optimize(::Status) = true
 MOI.get(m::Optimizer, ::Status) = MOI.get(m, MOI.RawStatusString())
 
 """
-    KOS.FlagOrigin()
+    KOSSolver.FlagOrigin()
 
 Why the last LP ended `optimal_flagged` (`"unscaled_violation"`, `"objective_unproven"`, ...), `""` otherwise.
 """
@@ -651,7 +651,7 @@ MOI.is_set_by_optimize(::FlagOrigin) = true
 MOI.get(m::Optimizer, ::FlagOrigin) = m.inner == C_NULL ? "" : _kos_flag_origin(m.inner)
 
 """
-    KOS.NoVerdictReason()
+    KOSSolver.NoVerdictReason()
 
 Why the last LP ended `no_verdict` (`MOI.OTHER_ERROR`), `""` otherwise.
 """
@@ -660,7 +660,7 @@ MOI.is_set_by_optimize(::NoVerdictReason) = true
 MOI.get(m::Optimizer, ::NoVerdictReason) = m.inner == C_NULL ? "" : _kos_no_verdict_reason(m.inner)
 
 """
-    KOS.Work()
+    KOSSolver.Work()
 
 The deterministic work of the last solve (a unit is about 1e9 visited entries).
 """
@@ -887,7 +887,7 @@ end
 # NO_CONFLICT_FOUND
 function MOI.compute_conflict!(m::Optimizer)
     # the conflict is that of the copied model: without a copy (before optimize!) there is no model
-    m.inner == C_NULL && error("KOS.jl computes the conflict of the copied model: call optimize! first")
+    m.inner == C_NULL && error("KOSSolver.jl computes the conflict of the copied model: call optimize! first")
     empty!(m.filas_en_conflicto)
     empty!(m.cotas_en_conflicto)
     r = _kos_iis(m.inner)
